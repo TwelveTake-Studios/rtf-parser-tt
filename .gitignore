@@ -1,0 +1,9 @@
+/target
+/Cargo.lock
+.idea
+
+/flamegraph.svg
+/*.csv
+tests/*
+TODO.txt
+profile.json
