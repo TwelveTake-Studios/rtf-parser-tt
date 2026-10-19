@@ -6,11 +6,9 @@
 
 RTF parser with special character support. Fork of [rtf-parser](https://crates.io/crates/rtf-parser) by [@d0rianb](https://github.com/d0rianb).
 
-## Why This Fork?
+## Why rtf-parser-tt
 
-The upstream `rtf-parser` crate silently drops special character control words like `\emdash`, `\endash`, and smart quotes. This causes **data loss** when parsing RTF from applications like Scrivener, Microsoft Word, and others.
-
-This fork adds support for these characters.
+rtf-parser-tt began as a fork of rtf-parser to preserve special characters such as em dashes and smart quotes. That support was merged into rtf-parser and released in version 0.4.3. rtf-parser-tt is maintained independently, with a focus on reliable handling of real-world documents: malformed input returns an error instead of causing a panic.
 
 ## Support
 
@@ -48,8 +46,8 @@ use rtf_parser_tt::RtfDocument;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rtf = r#"{\rtf1\ansi Hello\emdash world}"#;
     let doc = RtfDocument::try_from(rtf)?;
-    let text = doc.to_text();
-    assert!(text.contains("—")); // Em-dash preserved!
+    let text = doc.get_text();
+    assert!(text.contains("—"));
     Ok(())
 }
 ```
@@ -65,10 +63,6 @@ Key types:
 - `StyleBlock` - Text with formatting info
 - `Painter` - Text style (bold, italic, etc.)
 - `Paragraph` - Layout info (alignment, spacing)
-
-## Upstream Status
-
-A PR has been submitted to the upstream `rtf-parser` repository. Once merged, this fork may be deprecated in favor of the upstream version.
 
 ## License
 

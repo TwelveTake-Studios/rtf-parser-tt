@@ -3,6 +3,7 @@
 // Specification is available here : https://dokumen.tips/documents/rtf-specification.html
 // Explanations on specification here : https://www.oreilly.com/library/view/rtf-pocket-guide/9781449302047/ch01.html
 
+#![doc = include_str!("../README.md")]
 #![allow(irrefutable_let_patterns)]
 
 // Public API of the crate
