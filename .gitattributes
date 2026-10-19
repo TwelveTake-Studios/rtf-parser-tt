@@ -1,1 +1,2 @@
 resources/tests/* linguist-vendored
+resources/corpus/** -text
