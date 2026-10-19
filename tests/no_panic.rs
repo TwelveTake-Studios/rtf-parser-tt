@@ -71,7 +71,6 @@ fn document(rng: &mut Rng) -> String {
 }
 
 #[test]
-#[ignore = "phase 1: no panics"]
 fn random_inputs_never_panic() {
     panic::set_hook(Box::new(|_| {}));
     let mut rng = Rng(0x2545_f491_4f6c_dd1d);

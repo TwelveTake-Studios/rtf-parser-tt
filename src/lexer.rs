@@ -102,12 +102,12 @@ impl Lexer {
                 '\'' => {
                     // Escaped unicode in hex value : \'f0
                     let tail = slice.get(1..).unwrap_or("");
-                    if tail.len() < 2 {
+                    let (Some(hex), Some(rest)) = (tail.get(1..3), tail.get(3..)) else {
                         return Err(LexerError::InvalidUnicode(tail.into()));
-                    }
-                    let byte = u8::from_str_radix(&tail[1..3], 16)?; // f0
+                    };
+                    let byte = u8::from_str_radix(hex, 16)?;
                     let mut ret = vec![Token::ControlSymbol((ControlWord::Unicode, Property::Value(byte as i32)))];
-                    recursive_tokenize!(&tail[3..], ret);
+                    recursive_tokenize!(rest, ret);
                     return Ok(ret);
                 }
                 '\n' => {

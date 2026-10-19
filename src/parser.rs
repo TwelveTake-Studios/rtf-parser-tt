@@ -215,7 +215,7 @@ impl<'a> Parser<'a> {
                         ControlWord::SpaceLineMul       => paragraph.spacing.line_multiplier = property.get_value(),
                         ControlWord::UnicodeIgnoreCount => current_state.unicode_ignore_count = property.get_value(),
                         ControlWord::Unicode            => {
-                            let mut unicodes = Vec::with_capacity(current_state.unicode_ignore_count as usize + 1); // try to avoid realocation due to fallback unicodes
+                            let mut unicodes = Vec::new();
                             if let Ok(unicode) = property.get_unicode_value() {
                                 unicodes.push(unicode);
                             }
@@ -246,7 +246,7 @@ impl<'a> Parser<'a> {
                                 let mut ignore_mask_iter = ignore_mask.iter();
                                 unicodes.retain(|_| *ignore_mask_iter.next().unwrap());
                                 // Convert the unicode to string
-                                let str = String::from_utf16(unicodes.as_slice()).unwrap();
+                                let str = String::from_utf16_lossy(unicodes.as_slice());
                                 Self::add_text_to_document(&str, &state_stack, &mut document)?;
                             }
                         }

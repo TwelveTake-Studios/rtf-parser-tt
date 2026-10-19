@@ -15,10 +15,10 @@ impl StrUtils for str {
         let mut i = 0;
         // Faster than an iterator
         while i < len {
-            let c = bytes[i] as char;
+            let byte = bytes[i];
             i += 1;
 
-            if c.is_whitespace() {
+            if byte.is_ascii() && (byte as char).is_whitespace() {
                 break;
             } else {
                 first_whitespace_index += 1;

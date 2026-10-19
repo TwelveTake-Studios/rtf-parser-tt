@@ -25,7 +25,6 @@ fn corpus_is_present() {
 }
 
 #[test]
-#[ignore = "phase 1: no panics (libreoffice/international.rtf panics in 0.5.0)"]
 fn corpus_parses_without_panic() {
     panic::set_hook(Box::new(|_| {}));
     let mut panicked = Vec::new();
