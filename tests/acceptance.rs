@@ -77,7 +77,7 @@ fn keeps_punctuation_after_control_word() {
 #[test]
 #[ignore = "phase 1: \\uN fallback"]
 fn unicode_with_question_mark_fallback() {
-    assert_eq!(text(r"{\rtf1\ansi \uc1舒? end}"), "\u{2014} end");
+    assert_eq!(text(r"{\rtf1\ansi \uc1\u8212? end}"), "\u{2014} end");
 }
 
 #[test]

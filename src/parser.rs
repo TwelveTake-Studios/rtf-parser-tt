@@ -159,6 +159,7 @@ impl<'a> Parser<'a> {
         // Parse the body
         let len = self.tokens.len();
         let mut i = 0;
+        let mut pending_high_surrogate: Option<u16> = None;
 
         while i < len {
             if self.parsed_item[i] {
@@ -167,6 +168,11 @@ impl<'a> Parser<'a> {
                 continue;
             }
             let token = &self.tokens[i];
+
+            if pending_high_surrogate.is_some() && !matches!(token, Token::ControlSymbol((ControlWord::Unicode | ControlWord::UnicodeIgnoreCount, _))) {
+                pending_high_surrogate = None;
+                Self::add_text_to_document("\u{FFFD}", &state_stack, &mut document)?;
+            }
 
             match token {
                 Token::OpeningBracket => {
@@ -245,9 +251,17 @@ impl<'a> Parser<'a> {
                                 }
                                 let mut ignore_mask_iter = ignore_mask.iter();
                                 unicodes.retain(|_| *ignore_mask_iter.next().unwrap());
-                                // Convert the unicode to string
-                                let str = String::from_utf16_lossy(unicodes.as_slice());
-                                Self::add_text_to_document(&str, &state_stack, &mut document)?;
+                                if let Some(high) = pending_high_surrogate.take() {
+                                    let pairs = unicodes.first().is_some_and(|u| (0xDC00..=0xDFFF).contains(u));
+                                    unicodes.insert(0, if pairs { high } else { 0xFFFD });
+                                }
+                                if unicodes.last().is_some_and(|u| (0xD800..=0xDBFF).contains(u)) {
+                                    pending_high_surrogate = unicodes.pop();
+                                }
+                                if !unicodes.is_empty() {
+                                    let str = String::from_utf16_lossy(unicodes.as_slice());
+                                    Self::add_text_to_document(&str, &state_stack, &mut document)?;
+                                }
                             }
                         }
                         // Special characters - output as text
@@ -272,6 +286,9 @@ impl<'a> Parser<'a> {
                 Token::Empty => return Err(ParserError::ParseEmptyToken),
             };
             i += 1;
+        }
+        if pending_high_surrogate.is_some() && !state_stack.is_empty() {
+            Self::add_text_to_document("\u{FFFD}", &state_stack, &mut document)?;
         }
         return Ok(document);
     }

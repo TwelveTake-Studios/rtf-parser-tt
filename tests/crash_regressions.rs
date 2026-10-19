@@ -15,6 +15,18 @@ fn surrogate_pair_still_decodes() {
 }
 
 #[test]
+fn surrogate_pair_split_by_unicode_skip_count_decodes() {
+    assert_eq!(parse(r"{\rtf1\uc0 \u-10180\uc1 \u-8264\'3f x}").unwrap(), "\u{1F3B8} x");
+    assert_eq!(parse(r"{\rtf1 Emoji: \uc0 \u-10180\uc1 \u-8264\'3f\uc0 \u-10179\uc1 \u-8704\'3f}").unwrap(), "Emoji: \u{1F3B8}\u{1F600}");
+}
+
+#[test]
+fn high_surrogate_followed_by_text_becomes_replacement_character() {
+    assert_eq!(parse(r"{\rtf1\uc0 \u-10180 x}").unwrap(), "\u{FFFD}x");
+    assert_eq!(parse(r"{\rtf1\uc0 \u-10180}").unwrap(), "\u{FFFD}");
+}
+
+#[test]
 fn truncated_hex_escape_is_an_error() {
     assert!(parse(r"{\rtf1 a\'5}").is_err());
     assert!(parse(r"{\'9}").is_err());
