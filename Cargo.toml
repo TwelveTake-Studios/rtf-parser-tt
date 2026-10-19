@@ -9,7 +9,7 @@ license = "MIT"
 authors = ["TwelveTake Studios <contact@twelvetake.com>"]
 keywords = ["rtf", "rich", "text", "format", "parser"]
 categories = ["parsing", "parser-implementations"]
-exclude = ["*.rtf", ".idea", "resources/corpus", "benches", "tests"]
+exclude = ["*.rtf", ".idea", "resources/corpus", "benches", "tests", "examples"]
 
 [lib]
 crate-type = ["cdylib", "lib"]
