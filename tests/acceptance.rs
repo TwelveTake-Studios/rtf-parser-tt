@@ -21,7 +21,7 @@ fn keeps_text_after_control_word_delimiter() {
 
 #[test]
 fn keeps_raw_utf8_text() {
-    assert_eq!(text("{\\rtf1\\ansi Привет мир}"), "Привет мир");
+    assert_eq!(text("{\\rtf1\\ansi \u{41F}\u{440}\u{438}\u{432}\u{435}\u{442} \u{43C}\u{438}\u{440}}"), "\u{41F}\u{440}\u{438}\u{432}\u{435}\u{442} \u{43C}\u{438}\u{440}");
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn unicode_with_question_mark_fallback() {
 #[test]
 #[ignore = "phase 1: control word delimiters"]
 fn control_word_followed_by_non_ascii() {
-    assert_eq!(text("{\\rtf1\\ansi \\iРим\\i0 x}"), "Рим x");
+    assert_eq!(text("{\\rtf1\\ansi \\i\u{420}\u{438}\u{43C}\\i0 x}"), "\u{420}\u{438}\u{43C} x");
 }
 
 // Code pages
@@ -100,7 +100,7 @@ fn decodes_cp1252_hex_escapes() {
 #[test]
 #[ignore = "phase 1: code pages"]
 fn decodes_cp1251_hex_escapes() {
-    assert_eq!(text(r"{\rtf1\ansi\ansicpg1251 \'cf\'f0\'e8\'e2\'e5\'f2}"), "Привет");
+    assert_eq!(text(r"{\rtf1\ansi\ansicpg1251 \'cf\'f0\'e8\'e2\'e5\'f2}"), "\u{41F}\u{440}\u{438}\u{432}\u{435}\u{442}");
 }
 
 // Content that is not body text
@@ -136,25 +136,21 @@ fn applies_indents() {
 // No panics
 
 #[test]
-#[ignore = "phase 1: no panics"]
 fn unpaired_surrogate_does_not_panic() {
     does_not_panic(r"{\rtf1\ansi \u-10179 x}");
 }
 
 #[test]
-#[ignore = "phase 1: no panics"]
 fn truncated_hex_escape_does_not_panic() {
     does_not_panic(r"{\rtf1\ansi \'5}");
 }
 
 #[test]
-#[ignore = "phase 1: no panics"]
 fn control_word_against_non_ascii_does_not_panic() {
-    does_not_panic("{\\rtf1\\ansi \\iРим}");
+    does_not_panic("{\\rtf1\\ansi \\i\u{420}\u{438}\u{43C}}");
 }
 
 #[test]
-#[ignore = "phase 1: no panics"]
 fn invalid_escape_bytes_do_not_panic() {
     does_not_panic(&String::from_utf8_lossy(&[b'{', 92, 39, 0, 10, 0, b'}']));
 }

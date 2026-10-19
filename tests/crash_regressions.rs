@@ -53,6 +53,6 @@ fn ascii_whitespace_still_ends_a_control_word() {
 
 #[test]
 fn extreme_unicode_skip_counts_do_not_panic() {
-    assert_eq!(parse(r"{\rtf1\uc-5 \u233 x}").unwrap(), "éx");
-    assert_eq!(parse(r"{\rtf1\uc2000000000 \u233 x}").unwrap(), "éx");
+    assert_eq!(parse(r"{\rtf1\uc-5 \u233 x}").unwrap(), "\u{E9}x");
+    assert_eq!(parse(r"{\rtf1\uc2000000000 \u233 x}").unwrap(), "\u{E9}x");
 }
