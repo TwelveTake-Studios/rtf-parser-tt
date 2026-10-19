@@ -1,0 +1,30 @@
+﻿Word features
+A sentence with a footnote1.
+Visible text and hidden words in one paragraph.
+A paragraph with a reviewer comment[TS1].
+A field result: quoted field text
+A Wingdings symbol: ☺
+Name	Value
+Last paragraph.
+1 The footnote text.
+[TS1]A reviewer note.
+---------------
+
+------------------------------------------------------------
+
+---------------
+
+------------------------------------------------------------
+
+
+
+Page header text
+
+
+
+Page footer text
+
+
+
+
+

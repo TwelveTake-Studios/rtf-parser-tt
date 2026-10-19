@@ -1,0 +1,7 @@
+﻿“Double quotes” and ‘single quotes’ around words.
+Don’t forget the apostrophe in it’s and they’re.
+An em dash—like this—and an en dash in 2020–2025.
+An ellipsis… and a bullet • inside a sentence.
+A no-break space between 10 km, a soft hyphen, and a nonbreaking hyphen.
+Symbols: €100, © 2026, Brand®, Product™, §12, ¶3, °C, ±5, ×2, ÷4.
+Fractions and primes: ½, ¼, 5′11″.

@@ -1,0 +1,13 @@
+﻿French: Les élèves étudient à l’école, ça va très bien.
+German: Größe, Übung, Straße und Äpfel.
+Polish: Zażółć gęślą jaźń.
+Czech: Příliš žluťoučký kůň úpěl ďábelské ódy.
+Turkish: Iğdır’da şoför çiçek aldı.
+Greek: Καλημέρα κόσμε.
+Russian: Привет, мир. Съешь же ещё этих мягких французских булок.
+Hebrew: שלום עולם
+Arabic: مرحبا بالعالم
+Chinese: 你好，世界。
+Japanese: こんにちは世界。カタカナ。
+Korean: 안녕하세요 세계.
+Emoji: 🎸 🎶 😀

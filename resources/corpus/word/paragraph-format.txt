@@ -1,0 +1,11 @@
+﻿Left aligned paragraph.
+Centered paragraph.
+Right aligned paragraph.
+Justified paragraph with enough words to wrap across more than one line when it is displayed at a normal page width.
+Indented one inch from the left.
+Indented half an inch on both sides.
+      First line indented half an inch, followed by more text so the paragraph wraps onto a second line.
+Space before and after.
+Heading One
+Heading Two
+Body text after the headings.

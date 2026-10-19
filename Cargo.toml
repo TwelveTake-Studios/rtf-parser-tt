@@ -9,7 +9,7 @@ license = "MIT"
 authors = ["TwelveTake Studios <contact@twelvetake.com>"]
 keywords = ["rtf", "rich", "text", "format", "parser"]
 categories = ["parsing", "parser-implementations"]
-exclude = ["*.rtf", ".idea"]
+exclude = ["*.rtf", ".idea", "resources/corpus", "benches", "tests"]
 
 [lib]
 crate-type = ["cdylib", "lib"]
@@ -33,3 +33,10 @@ serde = { version = "1.0", features = ["derive"] }
 #[target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2", optional = true }
 tsify = { version = "0.4.5", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+
+[[bench]]
+name = "parse"
+harness = false

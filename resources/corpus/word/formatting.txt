@@ -1,0 +1,6 @@
+﻿Plain, bold, italic, underlined, struck, bold italic.
+Water is H2O and E equals mc2.
+SMALL CAPITALS and red text and highlighted text.
+Small, normal, large.
+Monospaced text and sans-serif text.
+Bold across words: one two three.

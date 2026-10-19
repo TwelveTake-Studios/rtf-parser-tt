@@ -1,0 +1,7 @@
+﻿The first paragraph is a single sentence.
+The second paragraph has two sentences. This is the second one.
+This paragraph contains a manual line break here
+and continues on the next line.
+The paragraph above this one is empty.
+This paragraph starts on a new page.
+Spacing with several spaces between words.
