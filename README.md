@@ -8,7 +8,7 @@ RTF parser with special character support. Fork of [rtf-parser](https://crates.i
 
 ## Why rtf-parser-tt
 
-rtf-parser-tt began as a fork of rtf-parser to preserve special characters such as em dashes and smart quotes. That support was merged into rtf-parser and released in version 0.4.3. rtf-parser-tt is maintained independently, with a focus on reliable handling of real-world documents: malformed input returns an error instead of causing a panic.
+rtf-parser-tt began as a fork of rtf-parser to preserve special characters such as em dashes and smart quotes. That support was merged into rtf-parser and released in version 0.4.3. rtf-parser-tt is maintained independently, with a focus on reliable handling of real-world documents: `RtfDocument::try_from` and `RtfDocument::from_filepath` return an error for malformed input instead of causing a panic.
 
 ## Support
 
