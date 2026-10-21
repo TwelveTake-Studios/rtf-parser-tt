@@ -14,7 +14,6 @@ rtf-parser-tt began as a fork of rtf-parser to preserve special characters such 
 
 If you find this crate useful, consider supporting development:
 
-- [GitHub Sponsors](https://github.com/sponsors/twelvetake)
 - [Ko-fi](https://ko-fi.com/twelvetake)
 
 ## Installation
