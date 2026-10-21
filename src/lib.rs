@@ -13,6 +13,8 @@ pub mod lexer;
 pub mod paragraph;
 pub mod parser;
 pub mod tokens;
+mod codepages;
+mod encoding;
 mod utils;
 
 // Re-export all the symbols to the global rtf-parser namespace

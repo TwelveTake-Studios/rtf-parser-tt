@@ -10,6 +10,7 @@ use crate::tokens::ControlWord;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Hash, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", wasm_bindgen)]
+#[non_exhaustive]
 pub struct Paragraph {
     pub alignment: Alignment,
     pub spacing: Spacing,
@@ -20,6 +21,7 @@ pub struct Paragraph {
 /// Alignement of a paragraph (left, right, center, justify)
 #[derive(Debug, Default, Clone, Copy, PartialEq, Hash, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
+#[non_exhaustive]
 pub enum Alignment {
     #[default]
     LeftAligned, // \ql
@@ -30,19 +32,20 @@ pub enum Alignment {
 
 impl From<&ControlWord<'_>> for Alignment {
     fn from(cw: &ControlWord) -> Self {
-        return match cw {
+        match cw {
             ControlWord::LeftAligned  => Alignment::LeftAligned,
             ControlWord::RightAligned => Alignment::RightAligned,
             ControlWord::Center       => Alignment::Center,
             ControlWord::Justify      => Alignment::Justify,
             _  /* default */          => Alignment::LeftAligned,
-        };
+        }
     }
 }
 
 /// The vertical margin before / after a block of text
 #[derive(Debug, Default, Clone, Copy, PartialEq, Hash, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", wasm_bindgen)]
+#[non_exhaustive]
 pub struct Spacing {
     pub before: i32,
     pub after: i32,
@@ -52,6 +55,7 @@ pub struct Spacing {
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Hash, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
+#[non_exhaustive]
 pub enum SpaceBetweenLine {
     Value(i32),
     #[default]
@@ -65,17 +69,18 @@ pub enum SpaceBetweenLine {
 // if N is a negative value, the absolute value of N is used, even if it is shorter than the tallest character.
 impl From<i32> for SpaceBetweenLine {
     fn from(value: i32) -> Self {
-        return match value {
+        match value {
             1000 => SpaceBetweenLine::Auto,
             val if val < 0 => SpaceBetweenLine::Value(val.abs()),
             val => SpaceBetweenLine::Value(val),
-        };
+        }
     }
 }
 
 // This struct can not be an enum because left-indent and right-ident can both be defined at the same time
 #[derive(Default, Debug, Clone, Copy, PartialEq, Hash, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", wasm_bindgen)]
+#[non_exhaustive]
 pub struct Indentation {
     pub left: i32,
     pub right: i32,

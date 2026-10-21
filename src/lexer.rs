@@ -1,10 +1,9 @@
 use std::fmt;
 
 use crate::tokens::{ControlWord, Property, Token};
-use crate::utils::StrUtils;
-use crate::{recursive_tokenize, recursive_tokenize_with_init};
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum LexerError {
     Error(String),
     InvalidUnicode(String),
@@ -15,161 +14,162 @@ impl std::error::Error for LexerError {}
 
 impl fmt::Display for LexerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let _ = write!(f, "[RTF Lexer] : ");
-        let _ = match self {
+        write!(f, "[RTF Lexer] : ")?;
+        match self {
             LexerError::InvalidLastChar => write!(f, "Invalid last char, should be '}}'"),
             LexerError::InvalidUnicode(uc) => write!(f, "Invalid unicode : {uc}"),
             LexerError::Error(msg) => write!(f, "{}", msg),
-        };
-        return Ok(());
+        }
     }
 }
 
 impl From<std::str::Utf8Error> for LexerError {
     fn from(value: std::str::Utf8Error) -> Self {
-        return LexerError::Error(value.to_string());
+        LexerError::Error(value.to_string())
     }
 }
 
 impl From<std::num::ParseIntError> for LexerError {
     fn from(value: std::num::ParseIntError) -> Self {
-        return LexerError::Error(value.to_string());
+        LexerError::Error(value.to_string())
     }
 }
+
+const fn special_bytes() -> [bool; 256] {
+    let mut table = [false; 256];
+    table[b'{' as usize] = true;
+    table[b'}' as usize] = true;
+    table[b'\\' as usize] = true;
+    table[b'\r' as usize] = true;
+    table[b'\n' as usize] = true;
+    table
+}
+
+static SPECIAL: [bool; 256] = special_bytes();
 
 pub struct Lexer;
 
 impl Lexer {
-    pub fn scan(src: &str) -> Result<Vec<Token>, LexerError> {
-        let src = src.trim(); // Sanitize src : Trim the leading whitespaces
-
-        let mut tokens: Vec<Token> = vec![];
-        let mut slice_start_index = 0;
-        let mut current_index = 0;
-        let mut previous_char = ' ';
-
-        // This is faster than using an iterator
-        let len = src.len();
+    pub fn scan(src: &str) -> Result<Vec<Token<'_>>, LexerError> {
+        let src = src.trim_matches(|c: char| c.is_whitespace() || c == '\0');
         let bytes = src.as_bytes();
+        let len = bytes.len();
+        let mut tokens = Vec::with_capacity(len / 32 + 1);
+        let mut text_start = 0;
         let mut i = 0;
-        while i < len {
-            let c = bytes[i] as char;
-            i += 1;
-
-            match c {
-                // TODO: Handle char over code 127 for escaped chars
-                // Handle Escaped chars : "\" + any charcode below 127
-                '{' | '}' | '\\' | '\n' if previous_char == '\\' => {}
-                '{' | '}' | '\\' | '\n' => {
-                    // End of slice chars
-                    if slice_start_index < current_index {
-                        // Close slice
-                        let slice = &src[slice_start_index..current_index];
-                        // Get the corresponding token(s)
-                        let slice_tokens = Self::tokenize(slice)?;
-                        tokens.extend_from_slice(&slice_tokens.as_slice());
-                        slice_start_index = current_index;
-                    }
+        while let Some(offset) = bytes[i..].iter().position(|&b| SPECIAL[usize::from(b)]) {
+            i += offset;
+            if text_start < i {
+                tokens.push(Token::PlainText(&src[text_start..i]));
+            }
+            i = match bytes[i] {
+                b'{' => {
+                    tokens.push(Token::OpeningBracket);
+                    i + 1
                 }
-                // Others chars
-                _ => {}
-            }
-            current_index += 1;
-            previous_char = c;
+                b'}' => {
+                    tokens.push(Token::ClosingBracket);
+                    i + 1
+                }
+                b'\\' => Self::escape(src, i, &mut tokens)?,
+                _ => i + 1,
+            };
+            text_start = i;
         }
-        // Manage last token (should always be "}")
-        if slice_start_index < current_index {
-            let slice = &src[slice_start_index..current_index];
-            if slice != "}" {
-                return Err(LexerError::InvalidLastChar);
-            }
-            tokens.push(Token::ClosingBracket);
+        if text_start < len {
+            tokens.push(Token::PlainText(&src[text_start..len]));
         }
-        return Ok(tokens);
+        Ok(tokens)
     }
 
-    /// Get a string slice cut but the scanner and return the coreesponding token(s)
-    fn tokenize(slice: &str) -> Result<Vec<Token>, LexerError> {
-        let mut starting_chars = slice.trim_matches(' ').chars().take(2);
-        return match (starting_chars.next(), starting_chars.next()) {
-            // If it starts with \ : escaped text or control word
-            (Some('\\'), Some(c)) => match c {
-                '{' | '}' | '\\' => {
-                    // Handle escaped chars
-                    let tail = slice.get(1..).unwrap_or("");
-                    return Ok(vec![Token::PlainText(tail)]); // No recursive tokenize here, juste some plain text because the char is escaped
-                }
-                '\'' => {
-                    // Escaped unicode in hex value : \'f0
-                    let tail = slice.get(1..).unwrap_or("");
-                    let (Some(hex), Some(rest)) = (tail.get(1..3), tail.get(3..)) else {
-                        return Err(LexerError::InvalidUnicode(tail.into()));
-                    };
-                    let byte = u8::from_str_radix(hex, 16)?;
-                    let mut ret = vec![Token::ControlSymbol((ControlWord::Unicode, Property::Value(byte as i32)))];
-                    recursive_tokenize!(rest, ret);
-                    return Ok(ret);
-                }
-                '\n' => {
-                    // CRLF
-                    let mut ret = vec![Token::CRLF];
-                    if let Some(tail) = slice.get(2..) {
-                        recursive_tokenize!(tail, ret);
-                    }
-                    return Ok(ret);
-                }
-                'a'..='z' => {
-                    // Identify control word
-                    // ex: parse "\b Words in bold" -> (Token::ControlWord(ControlWord::Bold), Token::ControlWordArgument("Words in bold")
-                    let (mut ident, tail) = slice.split_first_whitespace();
-                    // if ident end with semicolon, strip it for correct value parsing
-                    ident = if ident.chars().last().unwrap_or(' ') == ';' { &ident[0..ident.len() - 1] } else { ident };
-                    let control_word = ControlWord::from(ident)?;
-                    let mut ret = vec![Token::ControlSymbol(control_word)];
-                    recursive_tokenize!(tail, ret);
-
-                    // \u1234 \u1234 is ok, but \u1234  \u1234 is lost a space, \u1234   \u1234 lost two spaces, and so on
-                    // \u1234  1 -> No need to walk in here, it will enter plain text
-                    if control_word.0 == ControlWord::Unicode && tail.len() > 0 && tail.trim() == "" {
-                        ret.push(Token::PlainText(tail));
-                    }
-                    return Ok(ret);
-                }
-                '*' => Ok(vec![Token::IgnorableDestination]),
-                _ => Ok(vec![]),
-            },
-            (Some('\n'), Some(_)) => recursive_tokenize!(&slice[1..]), // Ignore the CRLF if it's not escaped
-            // Handle brackets
-            (Some('{'), None) => Ok(vec![Token::OpeningBracket]),
-            (Some('}'), None) => Ok(vec![Token::ClosingBracket]),
-            (Some('{'), Some(_)) => recursive_tokenize_with_init!(Token::OpeningBracket, &slice[1..]),
-            (Some('}'), Some(_)) => recursive_tokenize_with_init!(Token::ClosingBracket, &slice[1..]),
-            (None, None) => Err(LexerError::Error(format!("Empty token {}", &slice))),
-            // Else, it's plain text
-            _ => {
-                let text = slice.trim();
-                if text == "" {
-                    return Ok(vec![]);
-                }
-                return Ok(vec![Token::PlainText(slice)]);
-            }
+    fn escape<'a>(src: &'a str, start: usize, tokens: &mut Vec<Token<'a>>) -> Result<usize, LexerError> {
+        let bytes = src.as_bytes();
+        let Some(&next) = bytes.get(start + 1) else {
+            return Ok(start + 1);
         };
+        let symbol = |word| Token::ControlSymbol((word, Property::None));
+        match next {
+            b'a'..=b'z' | b'A'..=b'Z' => Self::control_word(src, start, tokens),
+            b'\'' => {
+                let hex = src.get(start + 2..start + 4).filter(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()));
+                let Some(hex) = hex else {
+                    let found: String = src[start + 1..].chars().take(3).collect();
+                    return Err(LexerError::InvalidUnicode(found));
+                };
+                let byte = u8::from_str_radix(hex, 16)?;
+                tokens.push(Token::ControlSymbol((ControlWord::HexChar, Property::Value(byte as i32))));
+                Ok(start + 4)
+            }
+            b'{' | b'}' | b'\\' => {
+                tokens.push(Token::PlainText(&src[start + 1..start + 2]));
+                Ok(start + 2)
+            }
+            b'\n' => {
+                tokens.push(Token::CRLF);
+                Ok(start + 2)
+            }
+            b'\r' => {
+                tokens.push(Token::CRLF);
+                Ok(if bytes.get(start + 2) == Some(&b'\n') { start + 3 } else { start + 2 })
+            }
+            b'*' => {
+                tokens.push(Token::IgnorableDestination);
+                Ok(start + 2)
+            }
+            b'~' | b'-' | b'_' | b'|' | b':' | b'\t' => {
+                tokens.push(symbol(match next {
+                    b'~' => ControlWord::NonBreakingSpace,
+                    b'-' => ControlWord::OptionalHyphen,
+                    b'_' => ControlWord::NonBreakingHyphen,
+                    b'|' => ControlWord::FormulaCharacter,
+                    b':' => ControlWord::IndexSubentry,
+                    _ => ControlWord::Tab,
+                }));
+                Ok(start + 2)
+            }
+            _ => Ok(start + 1 + src[start + 1..].chars().next().map_or(1, char::len_utf8)),
+        }
+    }
+
+    fn control_word<'a>(src: &'a str, start: usize, tokens: &mut Vec<Token<'a>>) -> Result<usize, LexerError> {
+        let bytes = src.as_bytes();
+        let len = bytes.len();
+        let mut end = start + 1;
+        while end < len && bytes[end].is_ascii_alphabetic() {
+            end += 1;
+        }
+        let digits = if end + 1 < len && bytes[end] == b'-' && bytes[end + 1].is_ascii_digit() { end + 1 } else { end };
+        let mut param_end = digits;
+        while param_end < len && bytes[param_end].is_ascii_digit() {
+            param_end += 1;
+        }
+        if param_end > digits {
+            end = param_end;
+        }
+        let symbol = ControlWord::from(&src[start..end])?;
+        tokens.push(Token::ControlSymbol(symbol));
+        let mut next = if bytes.get(end) == Some(&b' ') { end + 1 } else { end };
+        if let (ControlWord::Bin, Property::Value(count)) = symbol {
+            if count > 0 {
+                next = next.saturating_add(count as usize).min(len);
+                while !src.is_char_boundary(next) {
+                    next += 1;
+                }
+            }
+        }
+        Ok(next)
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::lexer::Lexer;
-    use crate::tokens::ControlWord::{Ansi, Bold, ColorBlue, ColorNumber, ColorRed, FontNumber, FontSize, FontTable, Italic, Par, Pard, Rtf, Underline, Unicode, Unknown};
+    use crate::tokens::ControlWord::{
+        Ansi, Bold, ColorBlue, ColorNumber, ColorRed, FontNumber, FontSize, FontTable, HexChar, Italic, NonBreakingHyphen, NonBreakingSpace,
+        OptionalHyphen, Par, Pard, Rtf, Underline, Unknown,
+    };
     use crate::tokens::Property::*;
     use crate::tokens::Token::*;
-    use crate::tokens::{ControlWord, Property};
-
-    #[test]
-    fn simple_tokenize_test() {
-        let tokens = Lexer::tokenize(r"\b Words in bold").unwrap();
-        assert_eq!(tokens, vec![ControlSymbol((Bold, None)), PlainText("Words in bold"),]);
-    }
 
     #[test]
     fn scan_entire_file_test() {
@@ -178,6 +178,7 @@ pub(crate) mod tests {
             tokens.unwrap(),
             vec![
                 OpeningBracket,
+                PlainText(" "),
                 ControlSymbol((Rtf, Value(1))),
                 ControlSymbol((Ansi, None)),
                 OpeningBracket,
@@ -223,7 +224,8 @@ if (a == b) \{\
                 CRLF,
                 PlainText("    test();"),
                 CRLF,
-                PlainText("} else "),
+                PlainText("}"),
+                PlainText(" else "),
                 PlainText("{"),
                 CRLF,
                 PlainText("    return;"),
@@ -236,37 +238,30 @@ if (a == b) \{\
 
     #[test]
     fn scan_ignorable_destination() {
-        let text = r"{\*\expandedcolortbl;;}";
-        let tokens = Lexer::scan(text);
+        let tokens = Lexer::scan(r"{\*\expandedcolortbl;;}");
         assert_eq!(
             tokens.unwrap(),
-            vec![OpeningBracket, IgnorableDestination, ControlSymbol((Unknown(r"\expandedcolortbl;"), None)), ClosingBracket,]
+            vec![OpeningBracket, IgnorableDestination, ControlSymbol((Unknown(r"\expandedcolortbl"), None)), PlainText(";;"), ClosingBracket]
         )
     }
 
     #[test]
-    fn should_parse_control_symbol_ending_semicolon() {
-        let text = r"{\red255\blue255;}";
-        let tokens = Lexer::scan(text);
+    fn semicolon_after_control_word_is_text() {
+        let tokens = Lexer::scan(r"{\red255\blue255;}");
         assert_eq!(
             tokens.unwrap(),
-            vec![OpeningBracket, ControlSymbol((ColorRed, Value(255))), ControlSymbol((ColorBlue, Value(255))), ClosingBracket]
+            vec![OpeningBracket, ControlSymbol((ColorRed, Value(255))), ControlSymbol((ColorBlue, Value(255))), PlainText(";"), ClosingBracket]
         );
     }
 
     #[test]
     fn lex_with_leading_whitespaces() {
-        // Try to parse without error
-        let rtf_content = "\t {\\rtf1 }\n "; // Not raw str for the whitespace to be trimed
-        let tokens = Lexer::scan(rtf_content).unwrap();
+        let tokens = Lexer::scan("\t {\\rtf1 }\n ").unwrap();
         assert_eq!(tokens, vec![OpeningBracket, ControlSymbol((Rtf, Value(1))), ClosingBracket]);
     }
 
     #[test]
-    fn should_parse_line_return() {
-        // From Microsoft's reference: "A carriage return (character value 13) or linefeed (character value 10)
-        // will be treated as a \par control if the character is preceded by a backslash.
-        // You must include the backslash; otherwise, RTF ignores the control word."
+    fn unescaped_line_breaks_are_ignored() {
         let text = r#"{\partightenfactor0
 
 \fs24 \cf0 Font size 12,
@@ -287,6 +282,7 @@ if (a == b) \{\
                 ControlSymbol((Underline, None)),
                 PlainText("Underline,bold text."),
                 CRLF,
+                PlainText(" "),
                 ClosingBracket
             ]
         );
@@ -294,8 +290,7 @@ if (a == b) \{\
 
     #[test]
     fn space_after_control_word() {
-        let text = r"{in{\i cred}ible}";
-        let tokens = Lexer::scan(text).unwrap();
+        let tokens = Lexer::scan(r"{in{\i cred}ible}").unwrap();
         assert_eq!(
             tokens,
             [OpeningBracket, PlainText("in"), OpeningBracket, ControlSymbol((Italic, None)), PlainText("cred"), ClosingBracket, PlainText("ible"), ClosingBracket,]
@@ -303,12 +298,89 @@ if (a == b) \{\
     }
 
     #[test]
-    fn should_handle_escaped_char() {
-        let rtf = r"{je suis une b\'eate}"; // ê = 0xea = 234
-        let tokens = Lexer::scan(rtf).unwrap();
+    fn hex_escape_is_its_own_token() {
+        let tokens = Lexer::scan(r"{je suis une b\'eate}").unwrap();
+        assert_eq!(tokens, [OpeningBracket, PlainText("je suis une b"), ControlSymbol((HexChar, Value(234))), PlainText("te"), ClosingBracket]);
+    }
+
+    #[test]
+    fn punctuation_ends_a_control_word() {
+        let tokens = Lexer::scan(r"{\b Bold\b0, then}").unwrap();
         assert_eq!(
             tokens,
-            [OpeningBracket, PlainText("je suis une b"), ControlSymbol((Unicode, Value(234))), PlainText("te"), ClosingBracket,]
+            [OpeningBracket, ControlSymbol((Bold, None)), PlainText("Bold"), ControlSymbol((Bold, Value(0))), PlainText(", then"), ClosingBracket]
         );
+    }
+
+    #[test]
+    fn only_one_space_is_a_delimiter() {
+        let tokens = Lexer::scan(r"{\b  two}").unwrap();
+        assert_eq!(tokens, [OpeningBracket, ControlSymbol((Bold, None)), PlainText(" two"), ClosingBracket]);
+    }
+
+    #[test]
+    fn non_ascii_ends_a_control_word() {
+        let tokens = Lexer::scan("{\\i\u{420}\u{438}\u{43C}}").unwrap();
+        assert_eq!(tokens, [OpeningBracket, ControlSymbol((Italic, None)), PlainText("\u{420}\u{438}\u{43C}"), ClosingBracket]);
+    }
+
+    #[test]
+    fn control_symbols() {
+        let tokens = Lexer::scan(r"{A\~B\-C\_D}").unwrap();
+        assert_eq!(
+            tokens,
+            [
+                OpeningBracket,
+                PlainText("A"),
+                ControlSymbol((NonBreakingSpace, None)),
+                PlainText("B"),
+                ControlSymbol((OptionalHyphen, None)),
+                PlainText("C"),
+                ControlSymbol((NonBreakingHyphen, None)),
+                PlainText("D"),
+                ClosingBracket
+            ]
+        );
+    }
+
+    #[test]
+    fn negative_parameter_needs_a_digit() {
+        let tokens = Lexer::scan(r"{\fi-180 x\b- y}").unwrap();
+        assert_eq!(
+            tokens,
+            [
+                OpeningBracket,
+                ControlSymbol((crate::tokens::ControlWord::FirstLineIdent, Value(-180))),
+                PlainText("x"),
+                ControlSymbol((Bold, None)),
+                PlainText("- y"),
+                ClosingBracket
+            ]
+        );
+    }
+
+    #[test]
+    fn bin_data_is_skipped() {
+        let tokens = Lexer::scan("{a\\bin5 }{\\x}b}").unwrap();
+        assert_eq!(tokens, [OpeningBracket, PlainText("a"), ControlSymbol((crate::tokens::ControlWord::Bin, Value(5))), PlainText("b"), ClosingBracket]);
+    }
+
+    #[test]
+    fn bin_data_stops_at_the_end() {
+        let tokens = Lexer::scan("{a\\bin99 xy").unwrap();
+        assert_eq!(tokens, [OpeningBracket, PlainText("a"), ControlSymbol((crate::tokens::ControlWord::Bin, Value(99)))]);
+    }
+
+    #[test]
+    fn unknown_control_symbol_is_dropped_whole() {
+        let tokens = Lexer::scan("{a\\\u{420}b}").unwrap();
+        assert_eq!(tokens, [OpeningBracket, PlainText("a"), PlainText("b"), ClosingBracket]);
+    }
+
+    #[test]
+    fn truncated_hex_escape_is_an_error() {
+        assert!(Lexer::scan(r"{\'5}").is_err());
+        assert!(Lexer::scan(r"{\'zz}").is_err());
+        assert!(Lexer::scan("{\\'").is_err());
     }
 }

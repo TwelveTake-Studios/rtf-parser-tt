@@ -1,9 +1,9 @@
 [package]
 name = "rtf-parser-tt"
-description = "RTF parser with special character support (emdash, smart quotes, etc). Fork of rtf-parser."
+description = "RTF parser that reads text, formatting, code pages and document structure. Fork of rtf-parser."
 repository = "https://github.com/TwelveTake-Studios/rtf-parser-tt"
 documentation = "https://docs.rs/rtf-parser-tt"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
 authors = ["TwelveTake Studios <contact@twelvetake.com>"]
@@ -24,11 +24,12 @@ opt-level = 0
 debug = true
 
 [features]
-default = []
+default = ["encoding_rs"]
 jsbindings = ["dep:wasm-bindgen", "dep:tsify"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
+encoding_rs = { version = "0.8", optional = true }
 
 #[target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2", optional = true }

@@ -5,13 +5,13 @@ use std::path::Path;
 fn test_sources_are_plain_ascii() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut found = Vec::new();
-    for dir in ["tests", "examples", "benches"] {
+    for dir in ["src", "tests", "examples", "benches"] {
         let Ok(entries) = fs::read_dir(root.join(dir)) else {
             continue;
         };
         for entry in entries {
             let path = entry.expect("directory entry").path();
-            if !path.extension().is_some_and(|ext| ext == "rs") {
+            if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
                 continue;
             }
             let text = fs::read_to_string(&path).expect("source file");

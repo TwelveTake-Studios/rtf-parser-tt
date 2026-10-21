@@ -8,6 +8,7 @@ use crate::parser::ParserError;
 /// Parser representation of an RTF token
 #[allow(dead_code)]
 #[derive(PartialEq, Eq, Clone)]
+#[non_exhaustive]
 pub enum Token<'a> {
     PlainText(&'a str),
     OpeningBracket,
@@ -41,6 +42,7 @@ pub type ControlSymbol<'a> = (ControlWord<'a>, Property);
 /// Parameters for a control word
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Property {
     On,         // 1
     Off,        // 0
@@ -54,7 +56,7 @@ impl Property {
             Property::On => true,
             Property::Off => false,
             Property::None => true,
-            Property::Value(val) => *val == 1,
+            Property::Value(val) => *val != 0,
         }
     }
 
@@ -65,12 +67,12 @@ impl Property {
             return T::try_from(*value).or(error);
         }
         // If no value, returns 0
-        return T::try_from(0).or(error);
+        T::try_from(0).or(error)
     }
 
     // Default variant
     pub fn get_value(&self) -> i32 {
-        return self.get_value_as::<i32>().expect("i32 to i32 conversion should never fail");
+        self.get_value_as::<i32>().expect("i32 to i32 conversion should never fail")
     }
 
     /// Return the u16 corresponding value of the unicode
@@ -84,11 +86,12 @@ impl Property {
             }
             return u16::try_from(value + offset).or(Err(ParserError::UnicodeParsingError(*value)));
         }
-        return Err(ParserError::UnicodeParsingError(0));
+        Err(ParserError::UnicodeParsingError(0))
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ControlWord<'a> {
     Rtf,
     Ansi,
@@ -151,31 +154,49 @@ pub enum ControlWord<'a> {
     Tab,
     Line,
 
+    Page,
+    Sect,
+    Cell,
+    Row,
+    NestCell,
+    NestRow,
+
+    Hidden,
+    HexChar,
+    NonBreakingSpace,
+    OptionalHyphen,
+    NonBreakingHyphen,
+    FormulaCharacter,
+    IndexSubentry,
+
+    AnsiCodePage,
+    Mac,
+    Pc,
+    Pca,
+    DefaultFont,
+
+    Bin,
+    Info,
+    Upr,
+    Ud,
+
     Unknown(&'a str),
 }
+
+const SKIPPED_DESTINATIONS: &[&str] = &[
+    "bkmkend", "bkmkstart", "colorschememapping", "datafield", "datastore", "do", "docvar", "fldinst", "generator", "latentstyles",
+    "listoverridetable", "listtable", "mmathPr", "nonshppict", "objclass", "objdata", "pgdsctbl", "pict", "pntxta", "pntxtb", "revtbl",
+    "rsidtbl", "sp", "tc", "template", "themedata", "userprops", "xe", "xmlnstbl",
+];
 
 impl<'a> ControlWord<'a> {
     // https://www.biblioscape.com/rtf15_spec.htm
     // version 1.5 should be compatible with 1.9
-    pub fn from(input: &str) -> Result<ControlSymbol, LexerError> {
-        // Loop backward the string to get the number
-        let mut it = input.chars().rev();
-        let mut suffix_index = 0;
-        while let Some(c) = it.next() {
-            match c {
-                '0'..='9' | '-' => {
-                    suffix_index += 1;
-                }
-                _ => break,
-            }
-        }
+    pub fn from(input: &str) -> Result<ControlSymbol<'_>, LexerError> {
+        let digits = input.bytes().rev().take_while(|b| b.is_ascii_digit() || *b == b'-').count();
+        let (prefix, suffix) = input.split_at(input.len() - digits);
 
-        // f0 -> prefix: f, suffix: 0
-        let index = input.len() - suffix_index;
-        let prefix = &input[..index];
-        let suffix = &input[index..];
-
-        let property = if suffix == "" {
+        let property = if suffix.is_empty() {
             Property::None
         } else {
             let Ok(value) = suffix.parse::<i32>() else {
@@ -184,70 +205,144 @@ impl<'a> ControlWord<'a> {
             Property::Value(value)
         };
 
+        let control_word = ControlWord::lookup(prefix);
+        Ok((control_word, property))
+    }
+
+    pub(crate) fn lookup<'w>(name: &'w str) -> ControlWord<'w> {
         #[rustfmt::skip]
-        let control_word = match prefix {
-            r"\rtf"           => ControlWord::Rtf,
-            r"\ansi"          => ControlWord::Ansi,
-            // Unicode
-            r"\u"             => ControlWord::Unicode,
-            r"\uc"            => ControlWord::UnicodeIgnoreCount,
-            // Header
-            r"\fonttbl"       => ControlWord::FontTable,
-            r"\colortbl"      => ControlWord::ColorTable,
-            r"\filetbl"       => ControlWord::FileTable,
-            r"\stylesheet"    => ControlWord::StyleSheet,
-            // Font
-            r"\fcharset"      => ControlWord::FontCharset,
-            r"\f"             => ControlWord::FontNumber,
-            r"\fs"            => ControlWord::FontSize,
-            r"\cf"            => ControlWord::ColorNumber,
-            // Format
-            r"\i"             => ControlWord::Italic,
-            r"\b"             => ControlWord::Bold,
-            r"\ul"            => ControlWord::Underline,
-            r"\ulnone"        => ControlWord::UnderlineNone,
-            r"\super"         => ControlWord::Superscript,
-            r"\sub"           => ControlWord::Subscript,
-            r"\scaps"         => ControlWord::Smallcaps,
-            r"\strike"        => ControlWord::Strikethrough,
-            // Paragraph
-            r"\par"           => ControlWord::Par,
-            r"\pard"          => ControlWord::Pard,
-            r"\sectd"         => ControlWord::Sectd,
-            r"\plain"         => ControlWord::Plain,
-            r"\s"             => ControlWord::ParStyle,
-            r"\pardeftab"     => ControlWord::ParDefTab,
-            // Paragraph alignment
-            r"\ql"            => ControlWord::LeftAligned,
-            r"\qr"            => ControlWord::RightAligned,
-            r"\qj"            => ControlWord::Justify,
-            r"\qc"            => ControlWord::Center,
-            // Paragraph indent
-            r"\fi"             => ControlWord::FirstLineIdent,
-            r"\ri"            => ControlWord::RightIndent,
-            r"\li"            => ControlWord::LeftIndent,
-            // Paragraph Spacing
-            r"\sb"            => ControlWord::SpaceBefore,
-            r"\sa"            => ControlWord::SpaceAfter,
-            r"\sl"            => ControlWord::SpaceBetweenLine,
-            r"\slmul"         => ControlWord::SpaceLineMul,
-            r"\red"           => ControlWord::ColorRed,
-            r"\green"         => ControlWord::ColorGreen,
-            r"\blue"          => ControlWord::ColorBlue,
-            // Special characters
-            r"\emdash"        => ControlWord::Emdash,
-            r"\endash"        => ControlWord::Endash,
-            r"\bullet"        => ControlWord::Bullet,
-            r"\lquote"        => ControlWord::LeftSingleQuote,
-            r"\rquote"        => ControlWord::RightSingleQuote,
-            r"\ldblquote"     => ControlWord::LeftDoubleQuote,
-            r"\rdblquote"     => ControlWord::RightDoubleQuote,
-            r"\tab"           => ControlWord::Tab,
-            r"\line"          => ControlWord::Line,
-            // Unknown
-            _                 => ControlWord::Unknown(prefix),
+        let word = match name.as_bytes().get(1) {
+            Some(b'a') => match name {
+                r"\ansi" => ControlWord::Ansi,
+                r"\ansicpg" => ControlWord::AnsiCodePage,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'b') => match name {
+                r"\b" => ControlWord::Bold,
+                r"\bin" => ControlWord::Bin,
+                r"\blue" => ControlWord::ColorBlue,
+                r"\bullet" => ControlWord::Bullet,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'c') => match name {
+                r"\cf" => ControlWord::ColorNumber,
+                r"\cell" => ControlWord::Cell,
+                r"\colortbl" => ControlWord::ColorTable,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'd') => match name {
+                r"\deff" => ControlWord::DefaultFont,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'e') => match name {
+                r"\emdash" => ControlWord::Emdash,
+                r"\endash" => ControlWord::Endash,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'f') => match name {
+                r"\f" => ControlWord::FontNumber,
+                r"\fi" => ControlWord::FirstLineIdent,
+                r"\fs" => ControlWord::FontSize,
+                r"\filetbl" => ControlWord::FileTable,
+                r"\fonttbl" => ControlWord::FontTable,
+                r"\fcharset" => ControlWord::FontCharset,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'g') => match name {
+                r"\green" => ControlWord::ColorGreen,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'i') => match name {
+                r"\i" => ControlWord::Italic,
+                r"\info" => ControlWord::Info,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'l') => match name {
+                r"\li" => ControlWord::LeftIndent,
+                r"\line" => ControlWord::Line,
+                r"\lquote" => ControlWord::LeftSingleQuote,
+                r"\ldblquote" => ControlWord::LeftDoubleQuote,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'm') => match name {
+                r"\mac" => ControlWord::Mac,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'n') => match name {
+                r"\nestrow" => ControlWord::NestRow,
+                r"\nestcell" => ControlWord::NestCell,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'p') => match name {
+                r"\pc" => ControlWord::Pc,
+                r"\par" => ControlWord::Par,
+                r"\pca" => ControlWord::Pca,
+                r"\page" => ControlWord::Page,
+                r"\pard" => ControlWord::Pard,
+                r"\plain" => ControlWord::Plain,
+                r"\pardeftab" => ControlWord::ParDefTab,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'q') => match name {
+                r"\qc" => ControlWord::Center,
+                r"\qj" => ControlWord::Justify,
+                r"\ql" => ControlWord::LeftAligned,
+                r"\qr" => ControlWord::RightAligned,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'r') => match name {
+                r"\ri" => ControlWord::RightIndent,
+                r"\red" => ControlWord::ColorRed,
+                r"\row" => ControlWord::Row,
+                r"\rtf" => ControlWord::Rtf,
+                r"\rquote" => ControlWord::RightSingleQuote,
+                r"\rdblquote" => ControlWord::RightDoubleQuote,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b's') => match name {
+                r"\s" => ControlWord::ParStyle,
+                r"\sa" => ControlWord::SpaceAfter,
+                r"\sb" => ControlWord::SpaceBefore,
+                r"\sl" => ControlWord::SpaceBetweenLine,
+                r"\sub" => ControlWord::Subscript,
+                r"\sect" => ControlWord::Sect,
+                r"\scaps" => ControlWord::Smallcaps,
+                r"\sectd" => ControlWord::Sectd,
+                r"\slmul" => ControlWord::SpaceLineMul,
+                r"\super" => ControlWord::Superscript,
+                r"\slmult" => ControlWord::SpaceLineMul,
+                r"\strike" => ControlWord::Strikethrough,
+                r"\stylesheet" => ControlWord::StyleSheet,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b't') => match name {
+                r"\tab" => ControlWord::Tab,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'u') => match name {
+                r"\u" => ControlWord::Unicode,
+                r"\uc" => ControlWord::UnicodeIgnoreCount,
+                r"\ud" => ControlWord::Ud,
+                r"\ul" => ControlWord::Underline,
+                r"\upr" => ControlWord::Upr,
+                r"\ulnone" => ControlWord::UnderlineNone,
+                _ => ControlWord::Unknown(name),
+            },
+            Some(b'v') => match name {
+                r"\v" => ControlWord::Hidden,
+                _ => ControlWord::Unknown(name),
+            },
+            _ => ControlWord::Unknown(name),
         };
-        return Ok((control_word, property));
+        word
+    }
+
+    pub(crate) fn skips_group(&self) -> bool {
+        match self {
+            ControlWord::FontTable | ControlWord::ColorTable | ControlWord::StyleSheet | ControlWord::FileTable => true,
+            ControlWord::Unknown(name) => SKIPPED_DESTINATIONS.contains(&name.trim_start_matches('\\')),
+            _ => false,
+        }
     }
 }
 
@@ -259,6 +354,14 @@ mod tests {
     fn control_word_from_input_test() {
         let input = r"\rtf1";
         assert_eq!(ControlWord::from(input).unwrap(), (ControlWord::Rtf, Property::Value(1)))
+    }
+
+    #[test]
+    fn lookup_finds_known_and_unknown_words() {
+        assert_eq!(ControlWord::from(r"\pard").unwrap(), (ControlWord::Pard, Property::None));
+        assert_eq!(ControlWord::from(r"\fs24").unwrap(), (ControlWord::FontSize, Property::Value(24)));
+        assert_eq!(ControlWord::from(r"\af3").unwrap(), (ControlWord::Unknown(r"\af"), Property::Value(3)));
+        assert_eq!(ControlWord::from(r"\zzz").unwrap(), (ControlWord::Unknown(r"\zzz"), Property::None));
     }
 
     #[test]

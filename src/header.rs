@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::paragraph::Paragraph;
 use crate::parser::Painter;
-use crate::tokens::{ControlWord, Token};
+use crate::tokens::{ControlWord, Property, Token};
 
 /// The ColorRef represent the index of the color in the ColorTable
 /// It's use in the document's body to reference a specific color with the \cfN or \cbN control words
@@ -27,16 +27,17 @@ pub type StyleSheet = HashMap<StyleRef, Style>;
 
 /// Style for the StyleSheet
 #[derive(Hash, Default, Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[non_exhaustive]
 pub struct Style {
-    /// The style attributes
-    painter: Painter,
-    /// The layout attributes
-    paragraph: Paragraph,
+    pub name: String,
+    pub painter: Painter,
+    pub paragraph: Paragraph,
 }
 
 /// Information about the document, including references to fonts & styles
 #[derive(Default, Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
+#[non_exhaustive]
 pub struct RtfHeader {
     pub character_set: CharacterSet,
     pub font_table: FontTable,
@@ -46,6 +47,7 @@ pub struct RtfHeader {
 
 #[derive(Hash, Default, Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", wasm_bindgen(getter_with_clone))]
+#[non_exhaustive]
 pub struct Font {
     pub name: String,
     pub character_set: u8,
@@ -54,6 +56,7 @@ pub struct Font {
 
 #[derive(Hash, Default, Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", wasm_bindgen)]
+#[non_exhaustive]
 pub struct Color {
     pub red: u8,
     pub green: u8,
@@ -63,6 +66,7 @@ pub struct Color {
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Default, Clone, Hash, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
+#[non_exhaustive]
 pub enum CharacterSet {
     #[default]
     Ansi,
@@ -76,7 +80,10 @@ impl CharacterSet {
     pub fn from(token: &Token) -> Option<Self> {
         match token {
             Token::ControlSymbol((ControlWord::Ansi, _)) => Some(Self::Ansi),
-            // TODO: implement the rest
+            Token::ControlSymbol((ControlWord::Mac, _)) => Some(Self::Mac),
+            Token::ControlSymbol((ControlWord::Pc, _)) => Some(Self::Pc),
+            Token::ControlSymbol((ControlWord::Pca, _)) => Some(Self::Pca),
+            Token::ControlSymbol((ControlWord::AnsiCodePage, Property::Value(code_page))) => u16::try_from(*code_page).ok().map(Self::Ansicpg),
             _ => None,
         }
     }
@@ -85,6 +92,7 @@ impl CharacterSet {
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Hash, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "jsbindings", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
+#[non_exhaustive]
 pub enum FontFamily {
     #[default]
     Nil,

@@ -6,7 +6,7 @@ fn parse(rtf: &str) -> Result<String, String> {
 
 #[test]
 fn unpaired_surrogate_becomes_replacement_character() {
-    assert_eq!(parse(r"{\rtf1 a\u-10179 b}").unwrap(), "a\u{FFFD}b");
+    assert_eq!(parse(r"{\rtf1 a\u-10179?b}").unwrap(), "a\u{FFFD}b");
 }
 
 #[test]
@@ -46,13 +46,14 @@ fn control_word_followed_by_non_ascii_does_not_panic() {
 }
 
 #[test]
-fn ascii_whitespace_still_ends_a_control_word() {
-    assert_eq!(parse("{\\rtf1 {\\b bold}\\tab\tx}").unwrap(), "bold\tx");
-    assert_eq!(parse("{\\rtf1 {\\b bold}\\tab\u{b}x}").unwrap(), "bold\tx");
+fn ascii_whitespace_ends_a_control_word_and_only_a_space_is_consumed() {
+    assert_eq!(parse("{\\rtf1 {\\b bold}\\tab\tx}").unwrap(), "bold\t\tx");
+    assert_eq!(parse("{\\rtf1 {\\b bold}\\tab\u{b}x}").unwrap(), "bold\t\u{b}x");
+    assert_eq!(parse("{\\rtf1 {\\b bold}\\tab x}").unwrap(), "bold\tx");
 }
 
 #[test]
 fn extreme_unicode_skip_counts_do_not_panic() {
     assert_eq!(parse(r"{\rtf1\uc-5 \u233 x}").unwrap(), "\u{E9}x");
-    assert_eq!(parse(r"{\rtf1\uc2000000000 \u233 x}").unwrap(), "\u{E9}x");
+    assert_eq!(parse(r"{\rtf1\uc2000000000 \u233 x}").unwrap(), "\u{E9}");
 }
