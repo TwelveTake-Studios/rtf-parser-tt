@@ -81,6 +81,7 @@ pub struct DocumentInfo {
 pub struct TextOptions {
     pub hidden_text: bool,
     pub notes: bool,
+    pub note_numbers: bool,
     pub headers_footers: bool,
 }
 
@@ -89,6 +90,7 @@ impl Default for TextOptions {
         Self {
             hidden_text: false,
             notes: true,
+            note_numbers: true,
             headers_footers: true,
         }
     }
@@ -108,6 +110,12 @@ impl TextOptions {
     }
 
     #[must_use]
+    pub fn note_numbers(mut self, include: bool) -> Self {
+        self.note_numbers = include;
+        self
+    }
+
+    #[must_use]
     pub fn headers_footers(mut self, include: bool) -> Self {
         self.headers_footers = include;
         self
@@ -117,6 +125,7 @@ impl TextOptions {
         let part = match block.part {
             Part::Body => true,
             Part::NoteReference(_) | Part::Note(_) => self.notes,
+            Part::NoteNumber(_) => self.notes && self.note_numbers,
             Part::Header | Part::Footer => self.headers_footers,
         };
         part && (self.hidden_text || !block.painter.hidden)
@@ -223,6 +232,14 @@ pub(crate) mod tests {
         assert_eq!(only(false, false, true), "Shown body\nHead\n");
         assert_eq!(only(false, true, false), "Shown body1\n1 Note.\n");
         assert_eq!(only(false, false, false), "Shown body\n");
+        assert_eq!(doc.get_text_with(TextOptions::default().note_numbers(false)), "Shown body1\n Note.\nHead\n");
+    }
+
+    #[test]
+    fn leaving_out_note_numbers_keeps_the_note_line_break() {
+        let doc = RtfDocument::try_from(r"{\rtf1\ansi A{\super\chftn}{\footnote\chftn} B{\super\chftn}{\footnote\chftn Two.}}").unwrap();
+        assert_eq!(doc.get_text(), "A1 B2\n1\n2Two.");
+        assert_eq!(doc.get_text_with(TextOptions::default().note_numbers(false)), "A1 B2\n\nTwo.");
     }
 
     #[test]
@@ -239,6 +256,7 @@ pub(crate) mod tests {
             TextOptions {
                 hidden_text: false,
                 notes: true,
+                note_numbers: true,
                 headers_footers: true
             }
         );

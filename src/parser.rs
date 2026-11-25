@@ -41,6 +41,7 @@ pub enum Part {
     Body,
     NoteReference(u32),
     Note(u32),
+    NoteNumber(u32),
     Header,
     Footer,
 }
@@ -341,7 +342,10 @@ impl TextSink {
         };
         match state.destination {
             Destination::Body => Parser::add_text_to_blocks(text, state, reference.map_or(Part::Body, Part::NoteReference), &mut document.body),
-            Destination::Deferred(Deferred::Note) => Parser::add_text_to_blocks(text, state, Part::Note(self.note_count), &mut self.notes),
+            Destination::Deferred(Deferred::Note) => {
+                let part = reference.map_or(Part::Note(self.note_count), |_| Part::NoteNumber(self.note_count));
+                Parser::add_text_to_blocks(text, state, part, &mut self.notes);
+            }
             Destination::Deferred(Deferred::Header) => Parser::add_text_to_blocks(text, state, Part::Header, &mut self.header_footer),
             Destination::Deferred(Deferred::Footer) => Parser::add_text_to_blocks(text, state, Part::Footer, &mut self.header_footer),
             Destination::Info(field) => field.slot(&mut document.info).get_or_insert_with(String::new).push_str(text),
@@ -358,16 +362,36 @@ impl TextSink {
             }
             Deferred::Header | Deferred::Footer => &mut self.header_footer,
         };
-        if let Some(last) = blocks.last_mut() {
-            if !last.text.ends_with('\n') {
-                last.text.push('\n');
-            }
+        TextSink::end_line(blocks);
+    }
+
+    fn end_line(blocks: &mut Vec<StyleBlock>) {
+        let Some(last) = blocks.last_mut() else {
+            return;
+        };
+        if last.text.ends_with('\n') {
+            return;
         }
+        let part = match last.part {
+            Part::NoteReference(_) => Part::Body,
+            Part::NoteNumber(number) => Part::Note(number),
+            _ => {
+                last.text.push('\n');
+                return;
+            }
+        };
+        let paragraph = last.paragraph;
+        blocks.push(StyleBlock {
+            paragraph,
+            part,
+            text: String::from("\n"),
+            ..StyleBlock::default()
+        });
     }
 
     fn note_number(&self, state: &ParserState) -> (u32, Option<u32>) {
         match state.destination {
-            Destination::Deferred(Deferred::Note) => (self.note_count, None),
+            Destination::Deferred(Deferred::Note) => (self.note_count, Some(self.note_count)),
             Destination::Body => {
                 let number = self.note_count.saturating_add(1);
                 (number, Some(number))
@@ -439,19 +463,7 @@ impl TextSink {
             if deferred.is_empty() {
                 continue;
             }
-            match document.body.last_mut() {
-                Some(last) if last.text.ends_with('\n') => {}
-                Some(last) if matches!(last.part, Part::NoteReference(_)) => {
-                    let paragraph = last.paragraph;
-                    document.body.push(StyleBlock {
-                        paragraph,
-                        text: String::from("\n"),
-                        ..StyleBlock::default()
-                    });
-                }
-                Some(last) => last.text.push('\n'),
-                None => {}
-            }
+            TextSink::end_line(&mut document.body);
             document.body.extend(deferred);
         }
         Ok(())
@@ -1390,7 +1402,7 @@ He said, \ldblquote Hello.\rdblquote\par}";
                 (Part::Body, "Body"),
                 (Part::NoteReference(1), "1"),
                 (Part::Body, " end.\n"),
-                (Part::Note(1), "1"),
+                (Part::NoteNumber(1), "1"),
                 (Part::Note(1), " Note.\n"),
                 (Part::Header, "Head\n"),
                 (Part::Footer, "Foot\n"),
@@ -1411,13 +1423,41 @@ He said, \ldblquote Hello.\rdblquote\par}";
                 (Part::Body, " B"),
                 (Part::NoteReference(2), "2"),
                 (Part::Body, "\n"),
-                (Part::Note(1), "1"),
+                (Part::NoteNumber(1), "1"),
                 (Part::Note(1), " One.\n"),
-                (Part::Note(2), "2"),
+                (Part::NoteNumber(2), "2"),
                 (Part::Note(2), " Two."),
             ]
         );
         assert!(!doc.body[4].painter.superscript);
+    }
+
+    #[test]
+    fn note_numbers_do_not_merge_with_note_text() {
+        let rtf = r"{\rtf1\ansi Body{\super\chftn{\footnote{\super\chftn} First note.}}.\par}";
+        let doc = RtfDocument::try_from(rtf).unwrap();
+        let parts: Vec<(Part, &str)> = doc.body.iter().map(|block| (block.part, block.text.as_str())).collect();
+        assert_eq!(parts, [(Part::Body, "Body"), (Part::NoteReference(1), "1"), (Part::Body, ".\n"), (Part::NoteNumber(1), "1"), (Part::Note(1), " First note.")]);
+        assert!(doc.body[4].painter.superscript);
+    }
+
+    #[test]
+    fn a_note_that_is_only_a_number_ends_on_its_own_line() {
+        let doc = RtfDocument::try_from(r"{\rtf1\ansi A\chftn{\footnote\chftn}B\chftn{\footnote\chftn}}").unwrap();
+        let parts: Vec<(Part, &str)> = doc.body.iter().map(|block| (block.part, block.text.as_str())).collect();
+        assert_eq!(
+            parts,
+            [
+                (Part::Body, "A"),
+                (Part::NoteReference(1), "1"),
+                (Part::Body, "B"),
+                (Part::NoteReference(2), "2"),
+                (Part::Body, "\n"),
+                (Part::NoteNumber(1), "1"),
+                (Part::Note(1), "\n"),
+                (Part::NoteNumber(2), "2"),
+            ]
+        );
     }
 
     #[test]

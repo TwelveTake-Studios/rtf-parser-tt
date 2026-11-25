@@ -20,7 +20,7 @@ If you find this crate useful, consider supporting development:
 
 ```toml
 [dependencies]
-rtf-parser-tt = "0.6"
+rtf-parser-tt = "0.7"
 ```
 
 ## Usage
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Plain text
 
-`get_text` returns the body text followed by footnotes, headers and footers, in the order Word uses when it saves a document as plain text, and omits hidden text. `get_text_with` selects what the text includes.
+`get_text` returns the body text followed by footnotes, headers and footers, in the order Word uses when it saves a document as plain text, and omits hidden text. `get_text_with` selects what the text includes: hidden text, footnotes, the numbers at the start of footnotes, and headers and footers.
 
 ```rust
 use rtf_parser_tt::{RtfDocument, TextOptions};
@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Document structure
 
-`RtfDocument::body` is a list of `StyleBlock` values. Each block holds a run of text with its character formatting (`Painter`), its paragraph properties (`Paragraph`) and the part of the document it belongs to (`Part`).
+`RtfDocument::body` is a list of `StyleBlock` values. Each block holds a run of text with its character formatting (`Painter`), its paragraph properties (`Paragraph`) and the part of the document it belongs to (`Part`). A footnote's number in the body is `Part::NoteReference(n)`; the footnote itself is `Part::NoteNumber(n)` for its number and `Part::Note(n)` for its text.
 
 ```rust
 use rtf_parser_tt::{Part, RtfDocument};
@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bold: Vec<&str> = doc.body.iter().filter(|block| block.painter.bold).map(|block| block.text.as_str()).collect();
     assert_eq!(bold, ["bold"]);
     let note: String = doc.body.iter().filter(|block| block.part == Part::Note(1)).map(|block| block.text.as_str()).collect();
-    assert_eq!(note, "1 A footnote.");
+    assert_eq!(note, " A footnote.");
     Ok(())
 }
 ```
@@ -114,7 +114,7 @@ To build without `encoding_rs`:
 
 ```toml
 [dependencies]
-rtf-parser-tt = { version = "0.6", default-features = false }
+rtf-parser-tt = { version = "0.7", default-features = false }
 ```
 
 ## API
@@ -122,7 +122,7 @@ rtf-parser-tt = { version = "0.6", default-features = false }
 Key types:
 - `RtfDocument` - Parsed document: header, document properties and body
 - `StyleBlock` - A run of text with its formatting, paragraph properties and part of the document
-- `Part` - Body text, footnote reference, footnote, header or footer
+- `Part` - Body text, footnote reference, footnote number, footnote text, header or footer
 - `TextOptions` - What `get_text_with` includes
 - `Painter` - Character formatting (bold, italic, hidden, etc.)
 - `Paragraph` - Paragraph properties (alignment, spacing, indents)

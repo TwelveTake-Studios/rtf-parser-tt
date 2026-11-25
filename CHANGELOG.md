@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-11-25
+
+### Added
+
+- `Part::NoteNumber(n)` marks the number (`\chftn`) at the start of a footnote. In 0.6 the number
+  shared `Part::Note(n)` with the text, and the two merged into one block whenever their
+  formatting matched, so a program could not tell where the number ended. The number is now always
+  its own block, as `Part::NoteReference(n)` already is in the body text. Reported by vulogov
+  (blackInkhaven). Code that matches `Part` with a catch-all arm now receives these blocks there,
+  and code that removed the number from the start of the note text no longer needs to.
+- `TextOptions::note_numbers` leaves the footnote numbers out of `get_text_with`. On by default,
+  so `get_text()` is unchanged.
+
 ## [0.6.1] - 2026-11-25
 
 ### Added
