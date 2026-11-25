@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| `encoding_rs` | Enabled | Decodes the Japanese (932), Simplified Chinese (936), Korean (949) and Traditional Chinese (950) code pages through [encoding_rs](https://crates.io/crates/encoding_rs). Without it, these bytes are read as Latin-1. |
+| `encoding_rs` | Enabled | Decodes the Japanese (932), Simplified Chinese (936), Korean (949) and Traditional Chinese (950) code pages, KOI8-R (20866), KOI8-U (21866), ISO 8859 (28592 to 28606) and Mac Cyrillic (10007) through [encoding_rs](https://crates.io/crates/encoding_rs). Without it, the four East Asian code pages are read as Latin-1 and the others as Windows-1252. |
 | `jsbindings` | Disabled | WebAssembly bindings through `wasm-bindgen`. |
 
 To build without `encoding_rs`:

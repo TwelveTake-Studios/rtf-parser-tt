@@ -196,6 +196,7 @@ struct ParserState {
     pub painter: Painter,
     pub paragraph: Paragraph,
     pub unicode_ignore_count: i32,
+    default_font: FontRef,
     destination: Destination,
     upr_resume: Option<Destination>,
 }
@@ -206,6 +207,7 @@ impl Default for ParserState {
             painter: Default::default(),
             paragraph: Default::default(),
             unicode_ignore_count: 1,
+            default_font: 0,
             destination: Destination::Body,
             upr_resume: None,
         }
@@ -250,7 +252,10 @@ impl ParserState {
         match control_word {
             ControlWord::ColorNumber        => painter.color_ref = property.get_value_as::<ColorRef>()?,
             ControlWord::FontNumber         => painter.font_ref = property.get_value_as::<FontRef>()?,
-            ControlWord::DefaultFont        => painter.font_ref = property.get_value_as::<FontRef>()?,
+            ControlWord::DefaultFont        => {
+                self.default_font = property.get_value_as::<FontRef>()?;
+                painter.font_ref = self.default_font;
+            }
             ControlWord::FontSize           => painter.font_size = property.get_value_as::<u16>()?,
             ControlWord::Bold               => painter.bold = property.as_bool(),
             ControlWord::Italic             => painter.italic = property.as_bool(),
@@ -262,7 +267,7 @@ impl ParserState {
             ControlWord::Strikethrough      => painter.strike = property.as_bool(),
             ControlWord::Hidden             => painter.hidden = property.as_bool(),
             ControlWord::Pard               => *paragraph = Paragraph::default(),
-            ControlWord::Plain              => *painter = Painter::default(),
+            ControlWord::Plain              => *painter = Painter { font_ref: self.default_font, ..Painter::default() },
             ControlWord::ParDefTab          => paragraph.tab_width = property.get_value(),
             ControlWord::LeftAligned
                 | ControlWord::RightAligned
@@ -514,6 +519,10 @@ impl<'a> Parser<'a> {
                 }
                 sink.flush_hex(&states, &mut document)?;
             }
+            if sink.fallback > 0 && Self::is_fallback_character(token) {
+                sink.fallback -= 1;
+                continue;
+            }
             match token {
                 Token::OpeningBracket => {
                     let state = states.last().cloned().unwrap_or_default();
@@ -574,9 +583,7 @@ impl<'a> Parser<'a> {
                     let emit = match control_word {
                         ControlWord::Rtf               => { seen_rtf = true; Emit::Nothing }
                         ControlWord::HexChar           => {
-                            if sink.fallback > 0 {
-                                sink.fallback -= 1;
-                            } else if let Property::Value(byte) = property {
+                            if let Property::Value(byte) = property {
                                 sink.hex.push(*byte as u8);
                             }
                             Emit::Nothing
@@ -637,6 +644,14 @@ impl<'a> Parser<'a> {
         }
         sink.finish(&states, &mut document)?;
         Ok(document)
+    }
+
+    fn is_fallback_character(token: &Token) -> bool {
+        match token {
+            Token::ControlSymbol((word, _)) => *word != ControlWord::Unicode,
+            Token::CRLF | Token::IgnorableDestination => true,
+            _ => false,
+        }
     }
 
     fn add_text_to_blocks(text: &str, state: &ParserState, part: Part, blocks: &mut Vec<StyleBlock>) {
@@ -783,6 +798,11 @@ impl<'a> Parser<'a> {
                         font.character_set = u8::try_from(property.get_value()).unwrap_or(0);
                     }
                 }
+                Token::ControlSymbol((ControlWord::FontCodePage, property)) => {
+                    if let Some((_, font)) = current.as_mut() {
+                        font.code_page = u16::try_from(property.get_value()).ok().filter(|code_page| *code_page > 0);
+                    }
+                }
                 Token::ControlSymbol((ControlWord::Unknown(name), _)) => {
                     if let (Some((_, font)), Some(font_family)) = (current.as_mut(), FontFamily::from(name)) {
                         font.font_family = font_family;
@@ -809,7 +829,7 @@ impl<'a> Parser<'a> {
             name_bytes.clear();
             return;
         };
-        let code_page = code_page_for_charset(font.character_set).unwrap_or(document_code_page);
+        let code_page = font.code_page.or_else(|| code_page_for_charset(font.character_set)).unwrap_or(document_code_page);
         let mut name = String::new();
         match std::str::from_utf8(name_bytes) {
             Ok(text) if text.is_ascii() || !name_bytes.iter().any(|b| *b >= 0x80 && !text.is_char_boundary(0)) => name.push_str(text),
@@ -951,6 +971,7 @@ pub mod tests {
                     Font {
                         name: "Helvetica".into(),
                         character_set: 0,
+                        code_page: None,
                         font_family: Swiss
                     }
                 )]),
@@ -1018,6 +1039,7 @@ Finally, back to the default color.\line
                         Font {
                             name: "Helvetica".into(),
                             character_set: 0,
+                            code_page: None,
                             font_family: Swiss,
                         }
                     ),
@@ -1026,6 +1048,7 @@ Finally, back to the default color.\line
                         Font {
                             name: "Helvetica-Bold".into(),
                             character_set: 0,
+                            code_page: None,
                             font_family: Swiss,
                         }
                     )

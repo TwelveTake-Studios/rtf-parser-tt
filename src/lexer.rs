@@ -127,7 +127,11 @@ impl Lexer {
                 }));
                 Ok(start + 2)
             }
-            _ => Ok(start + 1 + src[start + 1..].chars().next().map_or(1, char::len_utf8)),
+            _ => {
+                let end = start + 1 + src[start + 1..].chars().next().map_or(1, char::len_utf8);
+                tokens.push(symbol(ControlWord::Unknown(&src[start..end])));
+                Ok(end)
+            }
         }
     }
 
@@ -372,9 +376,20 @@ if (a == b) \{\
     }
 
     #[test]
-    fn unknown_control_symbol_is_dropped_whole() {
-        let tokens = Lexer::scan("{a\\\u{420}b}").unwrap();
-        assert_eq!(tokens, [OpeningBracket, PlainText("a"), PlainText("b"), ClosingBracket]);
+    fn unknown_control_symbol_is_one_whole_token() {
+        let tokens = Lexer::scan("{a\\\u{420}b\\@c}").unwrap();
+        assert_eq!(
+            tokens,
+            [
+                OpeningBracket,
+                PlainText("a"),
+                ControlSymbol((Unknown("\\\u{420}"), None)),
+                PlainText("b"),
+                ControlSymbol((Unknown("\\@"), None)),
+                PlainText("c"),
+                ClosingBracket
+            ]
+        );
     }
 
     #[test]

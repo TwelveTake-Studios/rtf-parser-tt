@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-11-25
+
+### Added
+
+- `Font::code_page` holds the code page a font-table `\cpgN` declares. It takes precedence over
+  the font's `\fcharsetN` when decoding text in that font.
+- With `encoding_rs`, KOI8-R (20866), KOI8-U (21866), ISO 8859 (28592 to 28606) and Mac Cyrillic
+  (10007) are decoded.
+
+### Changed
+
+- A code page the crate does not know is read as Windows-1252 instead of Latin-1.
+- `Lexer::scan` returns an unknown control symbol, such as `\@`, as a `ControlWord::Unknown`
+  token instead of dropping it.
+
+### Fixed
+
+- After `\uN`, a control word, control symbol, `\bin` run or escaped line break counts as one
+  fallback character, as the specification says. In 0.6.0 they were not counted, so the letter
+  after them was dropped. Reported by arclabs561 (deformat).
+- `\plain` returns to the document's default font (`\deffN`) instead of font 0, so text after it
+  decodes in the right code page.
+- `RtfDocument::from_bytes` no longer reads a literal backslash followed by `bin9` (`\\bin9`), or
+  a Shift-JIS character whose second byte is a backslash, as binary data.
+
 ## [0.6.0] - 2026-10-21
 
 ### Added

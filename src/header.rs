@@ -51,6 +51,8 @@ pub struct RtfHeader {
 pub struct Font {
     pub name: String,
     pub character_set: u8,
+    #[serde(default)]
+    pub code_page: Option<u16>,
     pub font_family: FontFamily,
 }
 

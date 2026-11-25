@@ -101,6 +101,7 @@ pub enum ControlWord<'a> {
 
     FontTable,
     FontCharset,
+    FontCodePage,
     FontNumber,
     FontSize, // Expressed in half point
     ColorNumber,
@@ -226,6 +227,7 @@ impl<'a> ControlWord<'a> {
             },
             Some(b'c') => match name {
                 r"\cf" => ControlWord::ColorNumber,
+                r"\cpg" => ControlWord::FontCodePage,
                 r"\cell" => ControlWord::Cell,
                 r"\colortbl" => ControlWord::ColorTable,
                 _ => ControlWord::Unknown(name),

@@ -8,7 +8,7 @@ pub(crate) fn code_page_for_font(font: &Font) -> Option<u16> {
     if font.character_set == 2 && font.name.eq_ignore_ascii_case("Symbol") {
         return Some(SYMBOL_CODE_PAGE);
     }
-    code_page_for_charset(font.character_set)
+    font.code_page.or_else(|| code_page_for_charset(font.character_set))
 }
 
 pub(crate) fn symbol_font_char(byte: u8) -> Option<char> {
@@ -50,14 +50,37 @@ pub(crate) fn code_page_for_document(character_set: &CharacterSet) -> u16 {
 }
 
 #[cfg(feature = "encoding_rs")]
-fn multi_byte_encoding(code_page: u16) -> Option<&'static encoding_rs::Encoding> {
+fn encoding_rs_codec(code_page: u16) -> Option<&'static encoding_rs::Encoding> {
+    use encoding_rs::*;
     match code_page {
-        932 => Some(encoding_rs::SHIFT_JIS),
-        936 => Some(encoding_rs::GBK),
-        949 => Some(encoding_rs::EUC_KR),
-        950 => Some(encoding_rs::BIG5),
+        932 => Some(SHIFT_JIS),
+        936 => Some(GBK),
+        949 => Some(EUC_KR),
+        950 => Some(BIG5),
+        10007 => Some(X_MAC_CYRILLIC),
+        20866 => Some(KOI8_R),
+        21866 => Some(KOI8_U),
+        28592 => Some(ISO_8859_2),
+        28593 => Some(ISO_8859_3),
+        28594 => Some(ISO_8859_4),
+        28595 => Some(ISO_8859_5),
+        28596 => Some(ISO_8859_6),
+        28597 => Some(ISO_8859_7),
+        28598 => Some(ISO_8859_8),
+        28599 => Some(WINDOWS_1254),
+        28600 => Some(ISO_8859_10),
+        28601 => Some(WINDOWS_874),
+        28603 => Some(ISO_8859_13),
+        28604 => Some(ISO_8859_14),
+        28605 => Some(ISO_8859_15),
+        28606 => Some(ISO_8859_16),
+        38598 => Some(ISO_8859_8_I),
         _ => None,
     }
+}
+
+fn is_east_asian(code_page: u16) -> bool {
+    matches!(code_page, 932 | 936 | 949 | 950)
 }
 
 #[cfg(feature = "encoding_rs")]
@@ -85,7 +108,7 @@ pub(crate) fn decode_into(code_page: u16, bytes: &[u8], out: &mut String) {
         return;
     }
     #[cfg(feature = "encoding_rs")]
-    if let Some(encoding) = multi_byte_encoding(code_page) {
+    if let Some(encoding) = encoding_rs_codec(code_page) {
         out.push_str(&encoding.decode_without_bom_handling(bytes).0);
         return;
     }
@@ -93,7 +116,11 @@ pub(crate) fn decode_into(code_page: u16, bytes: &[u8], out: &mut String) {
         out.extend(bytes.iter().map(|&byte| symbol_font_char(byte).unwrap_or(byte as char)));
         return;
     }
-    let table = single_byte_table(code_page);
+    if is_east_asian(code_page) {
+        out.extend(bytes.iter().map(|&byte| char::from(byte)));
+        return;
+    }
+    let table = single_byte_table(code_page).or_else(|| single_byte_table(DEFAULT_CODE_PAGE));
     for &byte in bytes {
         match (byte, table) {
             (0..=0x7F, _) => out.push(byte as char),
@@ -113,8 +140,13 @@ pub(crate) fn decode_document_bytes(bytes: &[u8]) -> String {
             let digits_start = i + 4;
             let digits_end = digits_start + bytes[digits_start..].iter().take_while(|b| b.is_ascii_digit()).count();
             if digits_end > digits_start {
-                decode_into(code_page, &bytes[run_start..i], &mut out);
-                out.push_str("\\bin0 ");
+                decode_into(code_page, &bytes[run_start..=i], &mut out);
+                run_start = i + 1;
+                if out.bytes().rev().take_while(|&byte| byte == b'\\').count() % 2 == 0 {
+                    i = digits_end;
+                    continue;
+                }
+                out.push_str("bin0 ");
                 let count: usize = std::str::from_utf8(&bytes[digits_start..digits_end]).ok().and_then(|n| n.parse().ok()).unwrap_or(0);
                 let payload = if bytes.get(digits_end) == Some(&b' ') { digits_end + 1 } else { digits_end };
                 i = payload.saturating_add(count).min(bytes.len());
